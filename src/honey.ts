@@ -14,24 +14,23 @@
  * limitations under the License.
  */
 
-import * as api from '@opentelemetry/api';
-import { ExportResult, ExportResultCode } from '@opentelemetry/core';
-import { SpanExporter, ReadableSpan } from '@opentelemetry/tracing';
-import { prepareSend } from './platform/index';
-import * as honeyTypes from './types';
+import { diag } from "@opentelemetry/api";
+import { ExportResult, ExportResultCode } from "@opentelemetry/core";
+import { SpanExporter, ReadableSpan } from "@opentelemetry/sdk-trace-base";
+import { prepareSend } from "./platform/index";
+import * as honeyTypes from "./types";
 import {
   toEvent,
   statusCodeTagName,
-  statusDescriptionTagName,
-} from './transform';
-import { SERVICE_RESOURCE } from '@opentelemetry/resources';
+  statusDescriptionTagName
+} from "./transform";
+import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
 
 /**
  * Honeycomb Exporter
  */
 export class HoneycombExporter implements SpanExporter {
-  private readonly DEFAULT_SERVICE_NAME = 'OpenTelemetry Service';
-  private readonly _logger: api.Logger;
+  private readonly DEFAULT_SERVICE_NAME = "OpenTelemetry Service";
   private readonly _statusCodeTagName: string;
   private readonly _statusDescriptionTagName: string;
   private _send: honeyTypes.SendFunction;
@@ -42,8 +41,7 @@ export class HoneycombExporter implements SpanExporter {
 
   constructor(config: honeyTypes.ExporterConfig) {
     this._apiUrl = config.url;
-    this._logger = config.logger || new api.NoopLogger();
-    this._send = prepareSend(this._logger, config.dataset, config.writeKey, this._apiUrl);
+    this._send = prepareSend(this._apiUrl, config.headers);
     this._serviceName = config.serviceName;
     this._statusCodeTagName = config.statusCodeTagName || statusCodeTagName;
     this._statusDescriptionTagName =
@@ -58,25 +56,25 @@ export class HoneycombExporter implements SpanExporter {
     spans: ReadableSpan[],
     resultCallback: (result: ExportResult) => void
   ) {
-    if (typeof this._serviceName !== 'string') {
+    if (typeof this._serviceName !== "string") {
       this._serviceName = String(
-        spans[0].resource.attributes[SERVICE_RESOURCE.NAME] ||
+        spans[0].resource.attributes[SemanticResourceAttributes.SERVICE_NAME] ||
           this.DEFAULT_SERVICE_NAME
       );
     }
-    this._logger.debug('Honeycomb exporter export');
+    diag.debug("Honeycomb exporter export");
     if (this._isShutdown) {
       // @ts-ignore
       setTimeout(() =>
         resultCallback({
           code: ExportResultCode.FAILED,
-          error: new Error('Exporter has been shutdown'),
+          error: new Error("Exporter has been shutdown")
         })
       );
       return;
     }
-    const promise = new Promise<void>(resolve => {
-      this._sendSpans(spans, this._serviceName!, result => {
+    const promise = new Promise<void>((resolve) => {
+      this._sendSpans(spans, this._serviceName!, (result) => {
         resolve();
         resultCallback(result);
         const index = this._sendingPromises.indexOf(promise);
@@ -90,7 +88,7 @@ export class HoneycombExporter implements SpanExporter {
    * Shutdown exporter. Noop operation in this exporter.
    */
   shutdown(): Promise<void> {
-    this._logger.debug('Honeycomb exporter shutdown');
+    diag.debug("Honeycomb exporter shutdown");
     this._isShutdown = true;
     return new Promise((resolve, reject) => {
       Promise.all(this._sendingPromises).then(() => {
@@ -107,7 +105,7 @@ export class HoneycombExporter implements SpanExporter {
     serviceName: string,
     done?: (result: ExportResult) => void
   ) {
-    const events = spans.map(span =>
+    const events = spans.map((span) =>
       toEvent(
         span,
         serviceName,

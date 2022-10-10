@@ -14,13 +14,23 @@
  * limitations under the License.
  */
 
-import * as api from '@opentelemetry/api';
-import { ReadableSpan } from '@opentelemetry/tracing';
-import { hrTimeToMilliseconds } from '@opentelemetry/core';
-import { Event } from './types';
+import { ReadableSpan, TimedEvent } from "@opentelemetry/sdk-trace-base";
+import { hrTimeToMicroseconds } from "@opentelemetry/core";
+import * as api from "@opentelemetry/api";
+import * as honeyTypes from "./types";
+import { Resource } from "@opentelemetry/resources";
 
-export const statusCodeTagName = 'ot.status_code';
-export const statusDescriptionTagName = 'ot.status_description';
+export const statusCodeTagName = "ot.status_code";
+export const statusDescriptionTagName = "ot.status_description";
+
+const HONEYCOMB_SPAN_KIND_MAPPING = {
+  [api.SpanKind.CLIENT]: honeyTypes.SpanKind.CLIENT,
+  [api.SpanKind.SERVER]: honeyTypes.SpanKind.SERVER,
+  [api.SpanKind.CONSUMER]: honeyTypes.SpanKind.CONSUMER,
+  [api.SpanKind.PRODUCER]: honeyTypes.SpanKind.PRODUCER,
+  // When absent, the span is local.
+  [api.SpanKind.INTERNAL]: undefined
+};
 
 /**
  * Translate OpenTelemetry ReadableSpan to ZipkinSpan format
@@ -30,31 +40,62 @@ export function toEvent(
   span: ReadableSpan,
   serviceName: string,
   statusCodeTagName: string,
-  statusDescriptionTagName: string
-): Event {
-  let event: Event = {}
-  event.trace_id = span.spanContext.traceId
-  event.parent_id = span.parentSpanId
-  event.name = span.name
-  event.id = span.spanContext.spanId
-  event.kind = span.kind
-  event.timestamp = new Date(hrTimeToMilliseconds(span.startTime))
-  event.duration_ms = hrTimeToMilliseconds(span.duration)
-  event.service_name = serviceName
-  for (const key of Object.keys(span.attributes)) {
-    event[key] = String(span.attributes[key]);
-  }
-  Object.keys(span.resource.attributes).forEach(
-    name => (event[name] = String(span.resource.attributes[name]))
-  );
-  event.events = span.events.map(event => ({
-    timestamp: new Date(hrTimeToMilliseconds(event.time)),
-    value: event.name,
-  }));
-  event[statusCodeTagName] = String(api.StatusCode[span.status.code]);
-  if (span.status.message) {
-    event[statusDescriptionTagName] = span.status.message;
-  }
+  statusErrorTagName: string
+): honeyTypes.Span {
+  let event: honeyTypes.Span = {
+    traceId: span.spanContext().traceId,
+    parentId: span.parentSpanId,
+    name: span.name,
+    id: span.spanContext().spanId,
+    kind: HONEYCOMB_SPAN_KIND_MAPPING[span.kind],
+    timestamp: hrTimeToMicroseconds(span.startTime),
+    duration: hrTimeToMicroseconds(span.duration),
+    localEndpoint: { serviceName },
+    tags: _toHoneyTags(
+      span.attributes,
+      span.status,
+      statusCodeTagName,
+      statusErrorTagName,
+      span.resource
+    ),
+    annotations: span.events.length
+      ? _toHoneyAnnotations(span.events)
+      : undefined
+  };
 
   return event;
+}
+
+export function _toHoneyTags(
+  attributes: api.SpanAttributes,
+  status: api.SpanStatus,
+  statusCodeTagName: string,
+  statusErrorTagName: string,
+  resource: Resource
+): honeyTypes.Tags {
+  const tags: { [key: string]: string } = {};
+  for (const key of Object.keys(attributes)) {
+    tags[key] = String(attributes[key]);
+  }
+  if (status.code !== api.SpanStatusCode.UNSET) {
+    tags[statusCodeTagName] = String(api.SpanStatusCode[status.code]);
+  }
+  if (status.code === api.SpanStatusCode.ERROR && status.message) {
+    tags[statusErrorTagName] = status.message;
+  }
+
+  Object.keys(resource.attributes).forEach(
+    (name) => (tags[name] = String(resource.attributes[name]))
+  );
+
+  return tags;
+}
+
+export function _toHoneyAnnotations(
+  events: TimedEvent[]
+): honeyTypes.Annotation[] {
+  return events.map((event) => ({
+    timestamp: hrTimeToMicroseconds(event.time),
+    value: event.name
+  }));
 }

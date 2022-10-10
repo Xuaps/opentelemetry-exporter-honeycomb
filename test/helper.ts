@@ -14,35 +14,35 @@
  * limitations under the License.
  */
 
-import { TraceFlags, StatusCode } from '@opentelemetry/api';
-import { ReadableSpan } from '@opentelemetry/tracing';
-import { Resource } from '@opentelemetry/resources';
-import * as assert from 'assert';
-import { Span } from '../src/types';
+import { SpanStatusCode, TraceFlags } from "@opentelemetry/api";
+import { ReadableSpan } from "@opentelemetry/sdk-trace-base";
+import { Resource } from "@opentelemetry/resources";
+import * as assert from "assert";
+import { Span } from "../src/types";
 
 export const mockedReadableSpan: ReadableSpan = {
-  name: 'documentFetch',
+  name: "documentFetch",
   kind: 0,
-  spanContext: {
-    traceId: '1f1008dc8e270e85c40a0d7c3939b278',
-    spanId: '5e107261f64fa53e',
-    traceFlags: TraceFlags.SAMPLED,
-  },
-  parentSpanId: '78a8915098864388',
+  spanContext: () => ({
+    traceId: "1f1008dc8e270e85c40a0d7c3939b278",
+    spanId: "5e107261f64fa53e",
+    traceFlags: TraceFlags.SAMPLED
+  }),
+  parentSpanId: "78a8915098864388",
   startTime: [1574120165, 429803070],
   endTime: [1574120165, 438688070],
   ended: true,
-  status: { code: StatusCode.OK },
-  attributes: { component: 'foo' },
+  status: { code: SpanStatusCode.OK },
+  attributes: { component: "foo" },
   links: [],
   events: [],
   duration: [0, 8885000],
   resource: new Resource({
-    service: 'ui',
+    service: "ui",
     version: 1,
-    cost: 112.12,
+    cost: 112.12
   }),
-  instrumentationLibrary: { name: 'default', version: '0.0.1' },
+  instrumentationLibrary: { name: "default", version: "0.0.1" }
 };
 
 export function ensureHeadersContain(
@@ -60,19 +60,19 @@ export function ensureHeadersContain(
 
 export function ensureSpanIsCorrect(span: Span) {
   assert.deepStrictEqual(span, {
-    traceId: '1f1008dc8e270e85c40a0d7c3939b278',
-    parentId: '78a8915098864388',
-    name: 'documentFetch',
-    id: '5e107261f64fa53e',
+    traceId: "1f1008dc8e270e85c40a0d7c3939b278",
+    parentId: "78a8915098864388",
+    name: "documentFetch",
+    id: "5e107261f64fa53e",
     timestamp: 1574120165429803,
     duration: 8885,
-    localEndpoint: { serviceName: 'OpenTelemetry Service' },
+    localEndpoint: { serviceName: "OpenTelemetry Service" },
     tags: {
-      component: 'foo',
-      'ot.status_code': 'OK',
-      service: 'ui',
-      version: '1',
-      cost: '112.12',
-    },
+      component: "foo",
+      "ot.status_code": "OK",
+      service: "ui",
+      version: "1",
+      cost: "112.12"
+    }
   });
 }
