@@ -17,7 +17,7 @@
 import { diag } from "@opentelemetry/api";
 import { ExportResult, ExportResultCode } from "@opentelemetry/core";
 import { SpanExporter, ReadableSpan } from "@opentelemetry/sdk-trace-base";
-import { prepareSend } from "./platform/index";
+import { prepareSend } from "./util";
 import * as honeyTypes from "./types";
 import {
   toEvent,

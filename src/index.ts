@@ -14,6 +14,6 @@
  * limitations under the License.
  */
 
-export * from './platform';
-export { ExporterConfig } from './types';
-export * from './honey';
+export * from "./util";
+export { ExporterConfig } from "./types";
+export * from "./honey";

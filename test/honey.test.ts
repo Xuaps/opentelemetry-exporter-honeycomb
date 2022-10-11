@@ -24,8 +24,8 @@ import {
 } from "@opentelemetry/core";
 import * as api from "@opentelemetry/api";
 import { Resource } from "@opentelemetry/resources";
-import { HoneycombExporter } from "../../src";
-import * as zipkinTypes from "../../src/types";
+import { HoneycombExporter } from "../src";
+import * as zipkinTypes from "../src/types";
 import { TraceFlags } from "@opentelemetry/api";
 import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
 

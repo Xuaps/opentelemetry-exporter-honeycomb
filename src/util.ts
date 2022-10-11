@@ -18,8 +18,8 @@ import { diag } from "@opentelemetry/api";
 import { ExportResult, ExportResultCode } from "@opentelemetry/core";
 
 import * as Libhoney from "libhoney";
-import * as honeyTypes from "../../types";
-import { HoneyOptions } from "../../types/libhoney";
+import * as honeyTypes from "./types";
+import { HoneyOptions } from "./types/libhoney";
 
 type _response = {
   status_code: number;
