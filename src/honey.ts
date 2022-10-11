@@ -41,7 +41,7 @@ export class HoneycombExporter implements SpanExporter {
 
   constructor(config: honeyTypes.ExporterConfig) {
     this._apiUrl = config.url;
-    this._send = prepareSend(this._apiUrl, config.headers);
+    this._send = prepareSend(config.dataset, config.writeKey, this._apiUrl);
     this._serviceName = config.serviceName;
     this._statusCodeTagName = config.statusCodeTagName || statusCodeTagName;
     this._statusDescriptionTagName =

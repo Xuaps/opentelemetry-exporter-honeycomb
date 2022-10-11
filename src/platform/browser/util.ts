@@ -14,116 +14,64 @@
  * limitations under the License.
  */
 
-import { diag } from '@opentelemetry/api';
-import {
-  ExportResult,
-  ExportResultCode,
-  globalErrorHandler,
-} from '@opentelemetry/core';
-import * as zipkinTypes from '../../types';
+import { diag } from "@opentelemetry/api";
+import { ExportResult, ExportResultCode } from "@opentelemetry/core";
+
+import * as Libhoney from "libhoney";
+import * as honeyTypes from "../../types";
+import { HoneyOptions } from "../../types/libhoney";
+
+type _response = {
+  status_code: number;
+  duration: number;
+  metadata: object;
+  error?: any;
+};
 
 /**
  * Prepares send function that will send spans to the remote Zipkin service.
- * @param urlStr - url to send spans
- * @param headers - headers
- * send
  */
-export function prepareSend(urlStr: string, headers?: Record<string, string>): zipkinTypes.SendFn {
-  let xhrHeaders: Record<string, string>;
-  const useBeacon = typeof navigator.sendBeacon === 'function' && !headers;
-  if (headers) {
-    xhrHeaders = {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      ...headers,
-    };
+export function prepareSend(
+  dataset: string,
+  writeKey: string,
+  apiHost?: string
+) {
+  let options: HoneyOptions = {
+    writeKey: writeKey,
+    dataset: dataset
+  };
+  if (apiHost) {
+    options.apiHost = apiHost;
   }
 
+  const hny = new Libhoney({
+    ...options,
+    responseCallback: (responses: _response[]) => {
+      responses.forEach((resp: _response) => {
+        if (resp.error) {
+          diag.error(resp.error);
+        }
+      });
+    }
+  });
   /**
    * Send spans to the remote Zipkin service.
    */
   return function send(
-    zipkinSpans: zipkinTypes.Span[],
+    events: honeyTypes.Span[],
     done: (result: ExportResult) => void
   ) {
-    if (zipkinSpans.length === 0) {
-      diag.debug('Zipkin send with empty spans');
+    if (events.length === 0) {
+      diag.debug("Honeycomb send with empty spans");
       return done({ code: ExportResultCode.SUCCESS });
     }
-    const payload = JSON.stringify(zipkinSpans);
-    if (useBeacon) {
-      sendWithBeacon(payload, done, urlStr);
-    } else {
-      sendWithXhr(payload, done, urlStr, xhrHeaders);
-    }
-  };
-}
-
-/**
- * Sends data using beacon
- * @param data
- * @param done
- * @param urlStr
- */
-function sendWithBeacon(
-  data: string,
-  done: (result: ExportResult) => void,
-  urlStr: string
-) {
-  if (navigator.sendBeacon(urlStr, data)) {
-    diag.debug('sendBeacon - can send', data);
-    done({ code: ExportResultCode.SUCCESS });
-  } else {
-    done({
-      code: ExportResultCode.FAILED,
-      error: new Error(`sendBeacon - cannot send ${data}`),
-    });
-  }
-}
-
-/**
- * Sends data using XMLHttpRequest
- * @param data
- * @param done
- * @param urlStr
- * @param xhrHeaders
- */
-function sendWithXhr(
-  data: string,
-  done: (result: ExportResult) => void,
-  urlStr: string,
-  xhrHeaders: Record<string, string> = {}
-) {
-  const xhr = new XMLHttpRequest();
-  xhr.open('POST', urlStr);
-  Object.entries(xhrHeaders).forEach(([k, v]) => {
-    xhr.setRequestHeader(k, v);
-  });
-
-  xhr.onreadystatechange = () => {
-    if (xhr.readyState === XMLHttpRequest.DONE) {
-      const statusCode = xhr.status || 0;
-      diag.debug(`Zipkin response status code: ${statusCode}, body: ${data}`);
-
-      if (xhr.status >= 200 && xhr.status < 400) {
-        return done({ code: ExportResultCode.SUCCESS });
-      } else {
-        return done({
-          code: ExportResultCode.FAILED,
-          error: new Error(
-            `Got unexpected status code from zipkin: ${xhr.status}`
-          ),
-        });
+    for (let event of events) {
+      let ev = hny.newEvent();
+      for (let key in event) {
+        ev.addField(key, event[key]);
       }
+      ev.timestamp = event.timestamp;
+      ev.send();
     }
   };
-
-  xhr.onerror = msg => {
-    globalErrorHandler(new Error(`Zipkin request error: ${msg}`));
-    return done({ code: ExportResultCode.FAILED });
-  };
-
-  // Issue request to remote service
-  diag.debug(`Zipkin request payload: ${data}`);
-  xhr.send(data);
 }
